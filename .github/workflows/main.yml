@@ -23,14 +23,15 @@ jobs:
         run: |
           pyinstaller -w -F -n pet shell.py
           
-      # 新增：把外置脚本和皮肤复制到dist，下载工件直接全套，不用手动复制
-      - name: 复制外置文件
-        run: |
-          copy main_logic.py dist\
-          xcopy skin dist\skin /E /I
-          
       - name: 上传打包产物
         uses: actions/upload-artifact@v4
         with:
           name: 桌面宠物程序
-          path: dist/
+          path: dist/复制 main_logic.py dist\
+          xcopy skin dist\skin /E /I
+          
+      - 名称: 上传打包产物name: 上传打包产物
+        使用：actions/upload-artifact@v4: actions/upload-artifact@v4
+        使用：:
+          桌面宠物程序: 桌面宠物程序
+          路径：dist/: dist/
