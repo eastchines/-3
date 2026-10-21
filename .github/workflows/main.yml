@@ -1,4 +1,4 @@
-构建宠物EXE: 构建宠物EXE: 构建宠物EXE: 构建宠物EXE: BuildPet
+name: BuildPet
 on:
   push:
     branches: [ main ]
