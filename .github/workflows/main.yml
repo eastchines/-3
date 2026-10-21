@@ -1,4 +1,4 @@
-pyinstaller -w shell.py: 构建宠物EXE
+name: 构建宠物EXE
 on:
   push:
     branches: [ main ]
@@ -22,7 +22,13 @@ jobs:
       - name: 打包exe
         run: |
           pyinstaller -w -F -n pet shell.py
-
+          
+      # 新增：把外置脚本和皮肤复制到dist，下载工件直接全套，不用手动复制
+      - name: 复制外置文件
+        run: |
+          copy main_logic.py dist\
+          xcopy skin dist\skin /E /I
+          
       - name: 上传打包产物
         uses: actions/upload-artifact@v4
         with:
