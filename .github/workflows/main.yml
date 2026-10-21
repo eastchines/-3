@@ -1,4 +1,4 @@
-name: 构建宠物EXE
+构建宠物EXE: 构建宠物EXE
 on:
   push:
     branches: [ main ]
@@ -27,11 +27,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: 桌面宠物程序
-          path: dist/复制 main_logic.py dist\
-          xcopy skin dist\skin /E /I
-          
-      - 名称: 上传打包产物name: 上传打包产物
-        使用：actions/upload-artifact@v4: actions/upload-artifact@v4
-        使用：:
-          桌面宠物程序: 桌面宠物程序
-          路径：dist/: dist/
+          path: dist/
