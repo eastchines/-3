@@ -1,4 +1,4 @@
-构建宠物EXE: 构建宠物EXE: 构建宠物EXE: 构建宠物EXE
+构建宠物EXE: 构建宠物EXE: 构建宠物EXE: 构建宠物EXE: BuildPet
 on:
   push:
     branches: [ main ]
@@ -7,24 +7,24 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: 拉取代码
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 安装Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: 安装依赖
+      - name: Install lib
         run: |
           pip install pyinstaller pillow pynput
 
-      - name: 打包exe
+      - name: Build exe
         run: |
           pyinstaller -w -F -n pet shell.py
-          
-      - name: 上传打包产物
+
+      - name: Upload
         uses: actions/upload-artifact@v4
         with:
-          name: 桌面宠物程序
+          name: pet
           path: dist/
