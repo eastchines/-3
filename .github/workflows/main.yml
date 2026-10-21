@@ -1,1 +1,30 @@
-pyinstaller -w shell.py
+pyinstaller -w shell.py: 构建宠物EXE
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: 拉取代码
+        uses: actions/checkout@v4
+
+      - name: 安装Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          pip install pyinstaller pillow pynput
+
+      - name: 打包exe
+        run: |
+          pyinstaller -w -F -n pet shell.py
+
+      - name: 上传打包产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: 桌面宠物程序
+          path: dist/
