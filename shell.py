@@ -1,43 +1,107 @@
 # -*- coding: utf-8 -*-
 """
-main.py —— 桌宠界面层
+main.py —— 固定窗口渲染层（打包成 exe 后不再改动）
 
-功能：
-  1. 透明无边框置顶窗口，图片外置在 exe 同级 skin 文件夹，可随时替换
-  2. 全局键盘监听：普通按键播完整套打字动画；Shift 播过渡特效后翻转形态
-  3. 左键拖动、右键关闭、鼠标滚轮比例缩放
-  4. 闲置 60 秒自动切少女形态左右游走；按键/拖动立即打断
-  5. 状态机与素材逻辑在 main_logic.py
+职责（都在 exe 内完成）：
+  1. 透明无边框置顶窗口，加载同级 skin 文件夹图片并渲染
+  2. 动态加载同级外部 main_logic.py（逻辑可随时修改，无需重新打包）
+  3. 全局键盘监听、左键拖动、右键关闭、滚轮缩放、闲置游走窗口移动
+  4. 加载失败 / 缺素材 / 缺接口时弹窗提示具体原因，不静默空白
+
+逻辑规则、动画节奏、形态切换全部在外部 main_logic.py 中定义。
 """
 
 import sys
 import os
+import importlib.util
 from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QMessageBox
 from PyQt5.QtGui import QPixmap, QMouseEvent
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal
 from pynput import keyboard
 
-from main_logic import PetLogic
+
+# 固定接口：外部 main_logic.py 必须提供这些方法
+REQUIRED_METHODS = [
+    "set_size", "on_key_press", "on_shift", "advance_frame",
+    "get_frame_info", "start_walk", "stop_walk", "is_walking", "get_config",
+]
 
 
-# ==================== 可调参数 ====================
-TYPE_FRAME_MS = 90        # 打字动画每帧间隔
-SWITCH_FRAME_MS = 120     # 切换过渡每帧间隔
-WALK_FRAME_MS = 180       # 走路每帧间隔
-WALK_SPEED = 4            # 游走速度（像素/帧）
-IDLE_TO_WALK_MS = 60000   # 闲置多久开始游走（毫秒）
-BASE_SIZE = 200           # 基础尺寸（scale=1 时的边长）
-SCALE_MIN = 0.3
-SCALE_MAX = 1.4
-SCALE_STEP = 0.08         # 滚轮每次缩放比例步进
-# =================================================
-
-
-def base_dir():
-    """exe 或脚本所在目录（打包后图片从 exe 同级 skin 读取）。"""
+def app_dir():
+    """exe 或脚本所在目录（打包后以 exe 目录为基准读取外部文件）。"""
     if getattr(sys, "frozen", False):
         return os.path.dirname(os.path.abspath(sys.executable))
     return os.path.dirname(os.path.abspath(__file__))
+
+
+def load_external_logic():
+    """动态加载同级 main_logic.py，失败时弹窗并退出。"""
+    logic_path = os.path.join(app_dir(), "main_logic.py")
+    if not os.path.exists(logic_path):
+        QMessageBox.critical(
+            None, "缺少逻辑文件",
+            f"未找到 main_logic.py：\n{logic_path}\n\n请把 main_logic.py 放到 exe 同一目录。"
+        )
+        sys.exit(1)
+    try:
+        spec = importlib.util.spec_from_file_location("external_main_logic", logic_path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        if not hasattr(module, "PetLogic"):
+            QMessageBox.critical(
+                None, "main_logic.py 结构错误",
+                "main_logic.py 中缺少 class PetLogic。\n请保留固定接口，只修改内部逻辑。"
+            )
+            sys.exit(1)
+        return module.PetLogic
+    except Exception as e:
+        QMessageBox.critical(
+            None, "main_logic.py 加载失败",
+            f"{type(e).__name__}: {e}\n\n请检查 main_logic.py 语法，"
+            "不要在里面 import PyQt5 / os 等第三方或系统库。"
+        )
+        sys.exit(1)
+
+
+def load_skin(skin_dir):
+    """把 skin 图片按分组加载到内存，返回分组字典。"""
+    data = {
+        "beast_idle": None, "beast_type": [],
+        "girl_idle": None, "girl_type": [],
+        "girl_walk": [], "switch": [],
+    }
+    if not os.path.isdir(skin_dir):
+        return data
+    for fname in sorted(os.listdir(skin_dir)):
+        if not fname.lower().endswith(".png"):
+            continue
+        pm = QPixmap(os.path.join(skin_dir, fname))
+        if pm.isNull():
+            continue
+        if fname == "beast_idle.png":
+            data["beast_idle"] = pm
+        elif fname.startswith("beast_type_"):
+            data["beast_type"].append(pm)
+        elif fname == "girl_idle.png":
+            data["girl_idle"] = pm
+        elif fname.startswith("girl_type_"):
+            data["girl_type"].append(pm)
+        elif fname.startswith("girl_walk_"):
+            data["girl_walk"].append(pm)
+        elif fname.startswith("switch_"):
+            data["switch"].append(pm)
+    return data
+
+
+def pick_pixmap(data, tag, idx):
+    """按分组标识取图，越界回退到本组第 0 张。"""
+    if tag in ("beast_idle", "girl_idle"):
+        return data[tag]
+    group = data.get(tag)
+    if group:
+        idx = max(0, min(idx, len(group) - 1))
+        return group[idx]
+    return None
 
 
 class DesktopPet(QWidget):
@@ -48,28 +112,46 @@ class DesktopPet(QWidget):
         super().__init__()
 
         self.setWindowFlags(
-            Qt.WindowStaysOnTopHint
-            | Qt.FramelessWindowHint
-            | Qt.Tool
+            Qt.WindowStaysOnTopHint | Qt.FramelessWindowHint | Qt.Tool
         )
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # 绝对路径定位 skin，打包后也能读到外部图片
-        skin_path = os.path.join(base_dir(), "skin")
-        self.logic = PetLogic(skin_path)
+        # 加载外部逻辑
+        PetLogic = load_external_logic()
+        self.logic = PetLogic()
 
-        # 素材缺失直接弹窗提示，避免空白静默
-        if not self.logic.is_ready():
-            missing = self.logic.missing_materials()
-            detail = "\n".join(missing) if missing else "skin 文件夹不存在或图片无法读取"
+        # 校验固定接口是否齐全
+        missing = [m for m in REQUIRED_METHODS if not callable(getattr(self.logic, m, None))]
+        if missing:
             QMessageBox.critical(
-                None, "素材缺失",
-                f"未在以下目录找到完整素材：\n{skin_path}\n\n缺失图片：\n{detail}"
+                None, "main_logic.py 接口缺失",
+                "缺少以下方法：\n" + "\n".join(missing) +
+                "\n\n请保留 main_logic.py 中的固定接口方法名。"
             )
             sys.exit(1)
 
+        # 读取逻辑层配置
+        cfg = self.logic.get_config() or {}
+        self.type_ms = cfg.get("type_frame_ms", 90)
+        self.switch_ms = cfg.get("switch_frame_ms", 120)
+        self.walk_ms = cfg.get("walk_frame_ms", 180)
+        self.walk_speed = cfg.get("walk_speed", 4)
+        self.idle_ms = cfg.get("idle_to_walk_ms", 60000)
+        self.base_size = cfg.get("base_size", 200)
+
+        # 加载皮肤
+        self.skin = load_skin(os.path.join(app_dir(), "skin"))
+        if self.skin["beast_idle"] is None or self.skin["girl_idle"] is None:
+            QMessageBox.critical(
+                None, "素材缺失",
+                f"未在以下目录找到完整待机图：\n{os.path.join(app_dir(), 'skin')}\n"
+                "请确认 skin 文件夹与 exe 同级，且包含 beast_idle.png、girl_idle.png 等图片。"
+            )
+            sys.exit(1)
+
+        # 缩放状态
         self.scale = 1.0
-        self.logic.set_size(BASE_SIZE, BASE_SIZE)
+        self.logic.set_size(self.base_size, self.base_size)
 
         self.label = QLabel(self)
         self.label.setAlignment(Qt.AlignCenter)
@@ -81,18 +163,21 @@ class DesktopPet(QWidget):
         self.sig_type.connect(self._on_type)
         self.sig_shift.connect(self._on_shift)
 
+        # 动画定时器
         self.anim_timer = QTimer(self)
         self.anim_timer.timeout.connect(self._tick)
-        self.anim_timer.start(TYPE_FRAME_MS)
+        self.anim_timer.start(self.type_ms)
 
+        # 闲置游走定时器
         self.walk_timer = QTimer(self)
         self.walk_timer.setSingleShot(True)
         self.walk_timer.timeout.connect(self._start_walk)
 
-        self._refresh_image()
+        self._refresh()
         self._reset_walk_timer()
         self.show()
 
+        # 全局键盘监听
         self.key_listener = keyboard.Listener(on_press=self._on_global_key)
         self.key_listener.daemon = True
         self.key_listener.start()
@@ -101,53 +186,60 @@ class DesktopPet(QWidget):
     # 事件分发（主线程）
     # ------------------------------------------------------------------
     def _on_type(self):
-        self.logic.on_typing()
-        self._refresh_image()
+        self.logic.on_key_press()
+        self._refresh()
         self._reset_walk_timer()
 
     def _on_shift(self):
         self.logic.on_shift()
-        self._refresh_image()
+        self._refresh()
         self._reset_walk_timer()
 
     def _start_walk(self):
         self.logic.start_walk()
-        self._refresh_image()
+        self._refresh()
 
     def _reset_walk_timer(self):
         self.walk_timer.stop()
-        self.walk_timer.start(IDLE_TO_WALK_MS)
+        self.walk_timer.start(self.idle_ms)
 
     # ------------------------------------------------------------------
-    # 帧推进 + 刷新
+    # 帧推进 + 渲染
     # ------------------------------------------------------------------
     def _tick(self):
-        if self.logic.state == PetLogic.STATE_SWITCHING:
-            self.anim_timer.setInterval(SWITCH_FRAME_MS)
-        elif self.logic.state == PetLogic.STATE_WALKING:
-            self.anim_timer.setInterval(WALK_FRAME_MS)
+        tag, _ = self.logic.get_frame_info()
+        if tag == "switch":
+            self.anim_timer.setInterval(self.switch_ms)
+        elif tag == "girl_walk":
+            self.anim_timer.setInterval(self.walk_ms)
         else:
-            self.anim_timer.setInterval(TYPE_FRAME_MS)
+            self.anim_timer.setInterval(self.type_ms)
 
         self.logic.advance_frame()
 
-        if self.logic.state == PetLogic.STATE_WALKING:
+        if self.logic.is_walking():
             self._move_walk()
 
-        self._refresh_image()
+        self._refresh()
 
-    def _refresh_image(self):
-        pm = self.logic.get_pixmap()
-        if pm is not None:
-            self.label.setPixmap(pm)
-            self.label.resize(pm.size())
-            self.resize(pm.size())
+    def _refresh(self):
+        tag, idx = self.logic.get_frame_info()
+        pm = pick_pixmap(self.skin, tag, idx)
+        if pm is None:
+            return
+        scaled = pm.scaled(
+            self.logic.pet_w, self.logic.pet_h,
+            Qt.KeepAspectRatio, Qt.SmoothTransformation
+        )
+        self.label.setPixmap(scaled)
+        self.label.resize(scaled.size())
+        self.resize(scaled.size())
 
     def _move_walk(self):
         screen = QApplication.primaryScreen().availableGeometry()
         min_x = screen.left()
         max_x = screen.right() - self.width()
-        new_x = self.x() + WALK_SPEED * self._walk_dir
+        new_x = self.x() + self.walk_speed * self._walk_dir
         if new_x <= min_x:
             new_x = min_x
             self._walk_dir = 1
@@ -157,7 +249,7 @@ class DesktopPet(QWidget):
         self.move(new_x, self.y())
 
     # ------------------------------------------------------------------
-    # 全局键盘（pynput 子线程，只发信号）
+    # 全局键盘（子线程，只发信号）
     # ------------------------------------------------------------------
     def _on_global_key(self, key):
         try:
@@ -174,7 +266,7 @@ class DesktopPet(QWidget):
     def mousePressEvent(self, event: QMouseEvent):
         if event.button() == Qt.LeftButton:
             self.drag_pos = event.globalPos() - self.frameGeometry().topLeft()
-            if self.logic.state == PetLogic.STATE_WALKING:
+            if self.logic.is_walking():
                 self.logic.stop_walk()
             self._reset_walk_timer()
             event.accept()
@@ -191,16 +283,12 @@ class DesktopPet(QWidget):
             self.drag_pos = None
             self._reset_walk_timer()
 
-    # 滚轮比例缩放
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
-        if delta > 0:
-            self.scale += SCALE_STEP
-        else:
-            self.scale -= SCALE_STEP
-        self.scale = min(SCALE_MAX, max(SCALE_MIN, self.scale))
-        self.logic.set_size(BASE_SIZE * self.scale, BASE_SIZE * self.scale)
-        self._refresh_image()
+        self.scale += 0.08 if delta > 0 else -0.08
+        self.scale = min(1.4, max(0.3, self.scale))
+        self.logic.set_size(self.base_size * self.scale, self.base_size * self.scale)
+        self._refresh()
         event.accept()
 
     def closeEvent(self, event):
@@ -215,4 +303,3 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     pet = DesktopPet()
     sys.exit(app.exec_())
-
