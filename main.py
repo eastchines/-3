@@ -1,9 +1,9 @@
-# -*- coding: utf-8 -*-
-"""
+# -*- 编码：utf-8 -*-
+"" "" ""
 main.py —— 固定窗口渲染层（打包成 exe 后不再改动）
 
-职责（都在 exe 内完成）：
-  1. 透明无边框置顶窗口，加载同级 skin 文件夹图片并渲染
+逻辑规则、动画节奏、形态切换全部在外部 main_logic.py 中定义。
+"" "" ""
   2. 动态加载同级外部 main_logic.py（逻辑可随时修改，无需重新打包）
   3. 全局键盘监听、左键拖动、右键关闭、滚轮缩放、闲置游走窗口移动
   4. 加载失败 / 缺素材 / 缺接口时弹窗提示具体原因，不静默空白
@@ -11,35 +11,35 @@ main.py —— 固定窗口渲染层（打包成 exe 后不再改动）
 逻辑规则、动画节奏、形态切换全部在外部 main_logic.py 中定义。
 """
 
-import sys
-import os
-import importlib.util
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QMessageBox
-from PyQt5.QtGui import QPixmap, QMouseEvent
-from PyQt5.QtCore import Qt, QTimer, pyqtSignal
-from pynput import keyboard
+导入系统 sys
+导入 os os
+导入导入导入库.工具 importlib.util
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QMessageBox PyQt5.QtWidgets import QApplication, QWidget, QLabel, QMessageBox
+from PyQt5.QtGui import QPixmap, QMouseEvent PyQt5.QtGui import QPixmap, QMouseEvent
+from PyQt5.QtCore import Qt, QTimer, pyqtSignal PyQt5.QtCore import Qt, QTimer, pyqtSignal
+从 pynput 导入 keyboard pynput import keyboard
 
 
 # 固定接口：外部 main_logic.py 必须提供这些方法
-REQUIRED_METHODS = [
-    "set_size", "on_key_press", "on_shift", "advance_frame",
-    "get_frame_info", "start_walk", "stop_walk", "is_walking", "get_config",
+REQUIRED_METHODS = [[
+    "set_size", "on_key_press", "on_shift", "advance_frame","set_size", "on_key_press", "on_shift", "advance_frame",
+    "获取帧信息", "开始行走", "停止行走", "是否行走", "获取配置","get_frame_info", "start_walk", "stop_walk", "is_walking", "get_config",
 ]
 
 
-def app_dir():
-    """exe 或脚本所在目录（打包后以 exe 目录为基准读取外部文件）。"""
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
-    return os.path.dirname(os.path.abspath(__file__))
+def app_dir(): app_dir():
+    “exe 或脚本所在目录（打包后以 exe 目录为基准读取外部文件）。”"""exe 或脚本所在目录（打包后以 exe 目录为基准读取外部文件）。"""
+    如果 sys 模块中存在 "frozen" 属性，则为 True：if getattr(sys, "frozen", False):
+        返回 os.path.dirname(os.path.abspath(sys.executable))return os.path.dirname(os.path.abspath(sys.executable))
+    返回 os.path.dirname(os.path.abspath(__file__))return os.path.dirname(os.path.abspath(__file__))
 
 
-def load_external_logic():
-    """动态加载同级 main_logic.py，失败时弹窗并退出。"""
-    logic_path = os.path.join(app_dir(), "main_logic.py")
-    if not os.path.exists(logic_path):
-        QMessageBox.critical(
-            None, "缺少逻辑文件",
+def 加载外部逻辑(): load_external_logic():
+    动态加载同级 main_logic.py，失败时弹窗并退出。"""动态加载同级 main_logic.py，失败时弹窗并退出。"""
+    logic_path = os.path.join(app_dir(), "main_logic.py")path.join(app_dir(), "main_logic.py")
+    如果逻辑路径不存在：if not os.path.exists(logic_path):
+        QMessageBox.critical(critical(
+            无，"缺少逻辑文件"，None, "缺少逻辑文件",
             f"未找到 main_logic.py：\n{logic_path}\n\n请把 main_logic.py 放到 exe 同一目录。"
         )
         sys.exit(1)
