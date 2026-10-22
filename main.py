@@ -1,12 +1,10 @@
 import os
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget
+from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QMessageBox
 from PyQt5.QtGui import QPixmap
-from PyQt5.QtCore import Qt, QTimer
-from PyQt5.QtCore import QPoint
+from PyQt5.QtCore import Qt, QTimer, QPoint
 import importlib.util
 
-# 加载外部 main_logic.py
 def load_logic():
     base_dir = os.path.dirname(sys.executable) if hasattr(sys, 'frozen') else os.path.dirname(__file__)
     logic_path = os.path.join(base_dir, "main_logic.py")
@@ -25,8 +23,11 @@ class PetWindow(QWidget):
         self.skin_dir = os.path.join(self.base_dir, "skin")
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.SubWindow)
         self.setAttribute(Qt.WA_TranslucentBackground)
-        self.img_label = None
+        self.img_label = QLabel(self)
+        self.img_label.setAlignment(Qt.AlignCenter)
         self.resize(self.logic.pet_w, self.logic.pet_h)
+
+        # 全局定时器，固定在这里
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(120)
@@ -41,18 +42,18 @@ class PetWindow(QWidget):
         return pix
 
     def update_frame(self):
+        # 通知逻辑层更新计时、状态
+        self.logic.advance_tick()
         group, frame = self.logic.get_frame_info()
         pix = self.get_image(group, frame)
         if pix:
-            self.setPixmap(pix)
-
-    def setPixmap(self, pix):
-        if self.img_label is None:
-            from PyQt5.QtWidgets import QLabel
-            self.img_label = QLabel(self)
-            self.img_label.setAlignment(Qt.AlignCenter)
-        self.img_label.setPixmap(pix)
-        self.img_label.resize(self.size())
+            self.img_label.setPixmap(pix)
+            self.img_label.resize(self.size())
+        # 获取移动偏移，执行移动
+        dx, dy = self.logic.get_move_offset()
+        if dx != 0 or dy != 0:
+            pos = self.pos()
+            self.move(pos.x() + dx, pos.y() + dy)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -69,24 +70,22 @@ class PetWindow(QWidget):
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
         step = 20
-        if delta > 0:
-            w = self.width() + step
-            h = self.height() + step
-        else:
-            w = max(80, self.width() - step)
-            h = max(80, self.height() - step)
+        w = self.width() + step if delta > 0 else max(80, self.width() - step)
+        h = self.height() + step if delta > 0 else max(80, self.height() - step)
         self.resize(w, h)
         self.logic.set_size(w, h)
 
     def keyPressEvent(self, event):
-        self.logic.on_key_press()
+        if event.key() == Qt.Key_Shift:
+            self.logic.on_shift_press()
+        else:
+            self.logic.on_key_press()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     try:
         pet_logic = load_logic()
     except Exception as e:
-        from PyQt5.QtWidgets import QMessageBox
         QMessageBox.critical(None, "加载逻辑失败", str(e))
         sys.exit(1)
     win = PetWindow(pet_logic)
