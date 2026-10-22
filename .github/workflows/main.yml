@@ -1,5 +1,4 @@
-name: Build Pet EXE
-
+name: Build EXE
 on:
   push:
     branches: [ main ]
@@ -7,9 +6,9 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -18,14 +17,14 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pyinstaller pillow pynput
+          python -m pip install --upgrade pip
+          pip install pyqt5 pynput pyinstaller
 
-      - name: Build exe
-        run: |
-          pyinstaller -w -F -n pet shell.py --collect-submodules=PIL --hidden-import=pynput --add-data "main_logic.py;."
+      - name: Build EXE
+        run: pyinstaller main.py -F -w --noconsole --hidden-import=PyQt5 --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui --hidden-import=PyQt5.QtWidgets --hidden-import=pynput --collect-all PyQt5
 
-      - name: Upload artifact
+      - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-pet
-          path: dist/
+          name: pet-exe
+          path: dist/main.exe
