@@ -21,16 +21,17 @@ class PetWindow(QWidget):
         self.logic = logic
         self.base_dir = os.path.dirname(sys.executable) if hasattr(sys, 'frozen') else os.path.dirname(__file__)
         self.skin_dir = os.path.join(self.base_dir, "skin")
+
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.SubWindow)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.img_label = QLabel(self)
         self.img_label.setAlignment(Qt.AlignCenter)
         self.resize(self.logic.pet_w, self.logic.pet_h)
 
-        # 全局定时器，固定在这里
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_frame)
         self.timer.start(120)
+
         self.drag_pos = QPoint()
 
     def get_image(self, name, idx):
@@ -42,14 +43,13 @@ class PetWindow(QWidget):
         return pix
 
     def update_frame(self):
-        # 通知逻辑层更新计时、状态
         self.logic.advance_tick()
         group, frame = self.logic.get_frame_info()
         pix = self.get_image(group, frame)
         if pix:
             self.img_label.setPixmap(pix)
             self.img_label.resize(self.size())
-        # 获取移动偏移，执行移动
+
         dx, dy = self.logic.get_move_offset()
         if dx != 0 or dy != 0:
             pos = self.pos()
@@ -70,8 +70,12 @@ class PetWindow(QWidget):
     def wheelEvent(self, event):
         delta = event.angleDelta().y()
         step = 20
-        w = self.width() + step if delta > 0 else max(80, self.width() - step)
-        h = self.height() + step if delta > 0 else max(80, self.height() - step)
+        if delta > 0:
+            w = self.width() + step
+            h = self.height() + step
+        else:
+            w = max(80, self.width() - step)
+            h = max(80, self.height() - step)
         self.resize(w, h)
         self.logic.set_size(w, h)
 
@@ -90,4 +94,4 @@ if __name__ == "__main__":
         sys.exit(1)
     win = PetWindow(pet_logic)
     win.show()
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
