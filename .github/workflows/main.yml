@@ -1,4 +1,4 @@
-名称：构建 EXE: Build EXE
+名称：构建 EXE: Build EXE: Build EXE
 on:
   push:
     branches: [ main ]
