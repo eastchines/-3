@@ -2,29 +2,29 @@ name: Build EXE
 on:
   push:
     branches: [ main ]
-
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install pyqt5 pynput pyinstaller
-
+      - name: Clean old build
+        run: |
+          Remove-Item -Recurse -Force build -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force dist -ErrorAction SilentlyContinue
+          Remove-Item *.spec -ErrorAction SilentlyContinue
       - name: Build EXE
-        run: pyinstaller main.py -F -w --noconsole --hidden-import=PyQt5 --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui --hidden-import=PyQt5.QtWidgets --hidden-import=pynput --collect-all PyQt5
-
+        run: pyinstaller main.py -w --hidden-import=PyQt5 --hidden-import=PyQt5.QtCore --hidden-import=PyQt5.QtGui --hidden-import=PyQt5.QtWidgets --hidden-import=pynput --collect-all PyQt5
       - name: Upload exe
         uses: actions/upload-artifact@v4
         with:
           name: pet-exe
-          path: dist/main.exe
+          path: dist
